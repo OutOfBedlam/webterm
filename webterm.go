@@ -13,6 +13,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type Runner interface {
+	Open() error
+	Close() error
+	Read(p []byte) (n int, err error)
+	Write(p []byte) (n int, err error)
+	SetWinSize(cols, rows int) error
+}
+
 type WebTerm struct {
 	runner          Runner
 	fsServer        http.Handler
@@ -114,7 +122,7 @@ func pumpStdin(ws *websocket.Conn, runner Runner) {
 				slog.Error("failed to unmarshal resize message", "error", err)
 				continue
 			}
-			runner.SetWinSize(sz.Cols, sz.Rows)
+			runner.SetWinSize(int(sz.Cols), int(sz.Rows))
 		case 1: // Data message
 			_, err = runner.Write(data)
 			if err != nil {
@@ -175,12 +183,4 @@ func WsDataHandle(runner Runner) http.HandlerFunc {
 		wg.Wait()
 		slog.Info("webterm data closed")
 	}
-}
-
-type Runner interface {
-	Open() error
-	Close() error
-	Read(p []byte) (n int, err error)
-	Write(p []byte) (n int, err error)
-	SetWinSize(cols, rows uint16) error
 }
