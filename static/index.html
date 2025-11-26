@@ -5,50 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .Localize "Web Terminal"}}</title>
-
-    <style>
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            box-sizing: border-box;
-            background-color: #0d1117;
-            color: white;
-            font-family: {{.Terminal.FontFamily}};
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        #container {
-            height: calc(100vh - 20px);
-            width: calc(100vw - 15px);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 10px 5px 10px 10px;
-        }
-
-        #terminal {
-            flex: 1;
-            min-height: 0;
-            padding: 8px 0 8px 8px;
-            background-color: {{.Terminal.Theme.Background}};
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-            user-select: none;
-            /* Disable text selection */
-            -ms-user-select: none;
-            /* IE 10+ */
-            -moz-user-select: none;
-            /* Firefox */
-            -webkit-user-select: none;
-            /* Safari */
-        }
-    </style>
 </head>
 
 <body>
@@ -58,13 +14,14 @@
         <div id="terminal"></div>
     </div>
 
-    <!-- Xterm.js CSS -->
+    <!-- Xterm.js CSS and JS -->
     <link rel="stylesheet" href="xterm.css" />
-    <!-- Xterm.js JS -->
     <script src="xterm.js"></script>
     <script src="addon-fit.min.js"></script>
     <script src="addon-attach.min.js"></script>
     <script src="addon-webgl.min.js"></script>
+    <!-- WebTerm CSS and JS -->
+    <link rel="stylesheet" href="webterm.css" />
     <script src="webterm.js"></script>
     <script>
         WebTerm("terminal", {{ .Terminal }});

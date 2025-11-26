@@ -6,6 +6,7 @@ WebTerm is a Go library that provides web-based terminal functionality using Web
 
 - 🖥️ **Local Command Execution** - Execute local shell commands in a web-based terminal
 - 🌐 **SSH Remote Connection** - Connect to remote servers via SSH in the browser
+- 📄 **File Tailing** - Tail one or multiple log files in real-time in the browser
 - 🎨 **Multiple Themes** - Built-in color schemes (Solarized, Dracula, Molokai, etc.)
 - 📦 **Embedded Static Assets** - All frontend assets are embedded in the binary
 - 🔌 **Simple HTTP Handler** - Easy integration with standard Go HTTP servers
@@ -83,6 +84,48 @@ func main() {
 }
 ```
 
+### File Tailing
+
+```go
+package main
+
+import (
+    "net/http"
+    
+    "github.com/OutOfBedlam/webterm"
+    "github.com/OutOfBedlam/webterm/webtail"
+)
+
+func main() {
+    // Tail a single file
+    term := webterm.New(
+        &webtail.WebTail{
+            Tails: []*webtail.Tail{
+                webtail.NewTail("/var/log/syslog"),
+            },
+        },
+        webterm.WithCutPrefix("/logs/"),
+        webterm.WithTheme(webterm.ThemeSolarizedDark),
+    )
+    
+    // Or tail multiple files
+    multiTerm := webterm.New(
+        &webtail.WebTail{
+            Tails: []*webtail.Tail{
+                webtail.NewTail("/var/log/syslog"),
+                webtail.NewTail("/var/log/auth.log"),
+                webtail.NewTail("/var/log/nginx/access.log"),
+            },
+        },
+        webterm.WithCutPrefix("/logs/"),
+        webterm.WithTheme(webterm.ThemeDracula),
+    )
+    
+    http.Handle("/logs/", term)
+    http.ListenAndServe(":8080", nil)
+}
+```
+
 ## Configuration Options
 
 ### WebTerm Options
@@ -136,6 +179,17 @@ Auth: []ssh.AuthMethod{
 }
 ```
 
+### WebTail Configuration
+
+```go
+&webtail.WebTail{
+    Tails: []*webtail.Tail{
+        webtail.NewTail("/path/to/file.log"),  // Single file
+        webtail.NewTail("/path/to/other.log"), // Multiple files
+    },
+}
+```
+
 ## Available Themes
 
 WebTerm includes several built-in color themes:
@@ -144,10 +198,7 @@ WebTerm includes several built-in color themes:
 - `ThemeSolarizedLight`
 - `ThemeDracula`
 - `ThemeMolokai`
-- `ThemeMonokai`
-- `ThemeNord`
-- `ThemeGruvboxDark`
-- `ThemeGruvboxLight`
+- `ThemeNordic`
 
 Example:
 ```go
@@ -181,6 +232,7 @@ WebTerm uses:
 
 - **webexec** - Local command execution runner
 - **webssh** - SSH remote connection runner
+- **webtail** - File tailing runner for monitoring log files
 
 ## Contributing
 

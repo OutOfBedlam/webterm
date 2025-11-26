@@ -10,7 +10,7 @@ import (
 mux := http.NewServeMux()
 mux.Handle("/web/ssh/", makeSSH("/web/ssh/"))
 
-func makeWebSSH(cutPrefix string) http.Handler {
+func makeSSH(cutPrefix string) http.Handler {
 	key, _ := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"))
 	user := os.Getenv("USER")
 

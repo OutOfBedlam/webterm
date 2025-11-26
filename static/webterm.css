@@ -1,0 +1,39 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    background-color: #0d1117;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#container {
+    height: calc(100vh - 20px);
+    width: calc(100vw - 20px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 10px 10px 10px;
+}
+
+#terminal {
+    flex: 1;
+    min-height: 0;
+    padding: 8px 4px 8px 8px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    user-select: none;
+    /* Disable text selection */
+    -ms-user-select: none;
+    /* IE 10+ */
+    -moz-user-select: none;
+    /* Firefox */
+    -webkit-user-select: none;
+    /* Safari */
+}

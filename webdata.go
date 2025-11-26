@@ -31,7 +31,7 @@ func DefaultTerminalOptions() TerminalOptions {
 	return TerminalOptions{
 		CursorBlink:  true,
 		FontSize:     12,
-		FontFamily:   `"Monaspace Neon",Menlo,monospace`,
+		FontFamily:   `"Monaspace Neon",Menlo,Consolas,ui-monospace,monospace`,
 		LineHeight:   1.2,
 		Scrollback:   1000,
 		Theme:        ThemeDefault,

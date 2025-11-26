@@ -55,7 +55,9 @@ function WebTerm(id, options = {}) {
     term.loadAddon(attachAddon);
 
     // Attach terminal to the DOM
-    term.open(document.getElementById(id));
+    let container = document.getElementById(id);
+    term.open(container);
+    container.style.backgroundColor = options.theme.background;
 
     // Refit on window resize with debounce
     let resizeTimeout;

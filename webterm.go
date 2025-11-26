@@ -26,6 +26,7 @@ type WebTerm struct {
 	fsServer        http.Handler
 	cutPrefix       string
 	terminalOptions TerminalOptions
+	localization    map[string]string
 }
 
 type Option func(*WebTerm)
@@ -39,6 +40,24 @@ func WithCutPrefix(cutPrefix string) Option {
 func WithTheme(theme TerminalTheme) Option {
 	return func(wt *WebTerm) {
 		wt.terminalOptions.Theme = theme
+	}
+}
+
+func WithFontFamily(fontFamily string) Option {
+	return func(wt *WebTerm) {
+		wt.terminalOptions.FontFamily = fontFamily
+	}
+}
+
+func WithFontSize(fontSize int) Option {
+	return func(wt *WebTerm) {
+		wt.terminalOptions.FontSize = fontSize
+	}
+}
+
+func WithLocalization(localization map[string]string) Option {
+	return func(wt *WebTerm) {
+		wt.localization = localization
 	}
 }
 
@@ -87,6 +106,10 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "data":
 		WsDataHandle(wt.runner)(w, r)
 	default:
+		if strings.HasPrefix(path, "index") {
+			http.NotFound(w, r)
+			return
+		}
 		r.URL.Path = "static/" + path
 		wt.fsServer.ServeHTTP(w, r)
 	}
@@ -94,7 +117,8 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (wt *WebTerm) dataMap() TemplateData {
 	return TemplateData{
-		Terminal: wt.terminalOptions,
+		Terminal:     wt.terminalOptions,
+		Localization: wt.localization,
 	}
 }
 
