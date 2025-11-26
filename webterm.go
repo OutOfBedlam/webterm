@@ -3,11 +3,11 @@ package webterm
 import (
 	"embed"
 	"encoding/json"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
-	"text/template"
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
@@ -19,6 +19,12 @@ type Runner interface {
 	Read(p []byte) (n int, err error)
 	Write(p []byte) (n int, err error)
 	SetWinSize(cols, rows int) error
+}
+
+type ExtRunner interface {
+	Template() *template.Template // provide custom template, if nil default will be used
+	ExtData() any                 // provide extension data to template
+	ExtMessage(data []byte)       // handle extension messages from client
 }
 
 type WebTerm struct {
@@ -82,14 +88,6 @@ var staticFS embed.FS
 var tmplIndex *template.Template
 
 func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if tmplIndex == nil {
-		if b, err := staticFS.ReadFile("static/index.html"); err != nil {
-			http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
-			return
-		} else {
-			tmplIndex = template.Must(template.New("index").Parse(string(b)))
-		}
-	}
 	path := strings.TrimPrefix(r.URL.Path, wt.cutPrefix)
 	defer func() {
 		if e := recover(); e != nil {
@@ -99,8 +97,26 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	switch path {
 	case "":
-		err := tmplIndex.Execute(w, wt.dataMap())
-		if err != nil {
+		var tmpl *template.Template
+		if provider, ok := wt.runner.(ExtRunner); ok {
+			tmpl = provider.Template()
+		}
+		if tmpl == nil {
+			if tmplIndex == nil {
+				if b, err := staticFS.ReadFile("static/index.html"); err != nil {
+					http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+					return
+				} else {
+					tmplIndex = template.Must(template.New("index").Parse(string(b)))
+				}
+			}
+			tmpl = tmplIndex
+		}
+		if tmpl == nil {
+			http.Error(w, "Template not provided", http.StatusInternalServerError)
+			return
+		}
+		if err := tmpl.Execute(w, wt.dataMap()); err != nil {
 			http.Error(w, "Failed to render index.html", http.StatusInternalServerError)
 		}
 	case "data":
@@ -116,9 +132,14 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wt *WebTerm) dataMap() TemplateData {
+	var ext any
+	if provider, ok := wt.runner.(ExtRunner); ok {
+		ext = provider.ExtData()
+	}
 	return TemplateData{
 		Terminal:     wt.terminalOptions,
 		Localization: wt.localization,
+		Ext:          ext,
 	}
 }
 
@@ -152,6 +173,10 @@ func pumpStdin(ws *websocket.Conn, runner Runner) {
 			if err != nil {
 				slog.Error("failed to write to stdin", "error", err)
 				return
+			}
+		case 2: // Ext message
+			if provider, ok := runner.(ExtRunner); ok {
+				provider.ExtMessage(data)
 			}
 		}
 	}

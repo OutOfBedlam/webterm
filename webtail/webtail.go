@@ -2,7 +2,11 @@ package webtail
 
 import (
 	"crypto/md5"
+	_ "embed"
 	"encoding/hex"
+	"html/template"
+	"log/slog"
+	"path/filepath"
 
 	"github.com/OutOfBedlam/webterm"
 )
@@ -24,6 +28,7 @@ func NewTail(filename string, opts ...Option) *Tail {
 }
 
 var _ webterm.Runner = (*WebTail)(nil)
+var _ webterm.ExtRunner = (*WebTail)(nil)
 
 type WebTail struct {
 	Tails  []*Tail
@@ -63,9 +68,47 @@ func (wt *WebTail) Read(p []byte) (n int, err error) {
 }
 
 func (wt *WebTail) Write(p []byte) (n int, err error) {
-	return 0, nil
+	// No-op
+	return len(p), nil
 }
 
 func (wt *WebTail) SetWinSize(cols, rows int) error {
 	return nil
+}
+
+var tmpl *template.Template
+
+//go:embed webtail.html
+var webtailHTML string
+
+func (wt *WebTail) Template() *template.Template {
+	if tmpl == nil {
+		tmpl = template.Must(template.New("webtail").Parse(webtailHTML))
+	}
+	return tmpl
+}
+
+type ControlBar struct {
+	Hide       bool   `json:"hide"`
+	FontSize   int    `json:"fontSize,omitempty"`
+	FontFamily string `json:"fontFamily,omitempty"`
+}
+
+func (wt *WebTail) ExtData() any {
+	files := []string{}
+	for _, t := range wt.Tails {
+		files = append(files, filepath.Base(t.filename))
+	}
+	return map[string]any{
+		"ControlBar": ControlBar{
+			Hide:       false,
+			FontSize:   12,
+			FontFamily: "monospace",
+		},
+		"Files": files,
+	}
+}
+
+func (wt *WebTail) ExtMessage(data []byte) {
+	slog.Debug("received ext message", "data", string(data))
 }

@@ -12,7 +12,7 @@ function WebTerm(id, options = {}) {
     // WebSocket connection management
     let ws = null;
     // Send terminal input to server via WebSocket
-    send = (code, data) => {
+    term.send = (code, data) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
             var buf = new Uint8Array(1 + data.length);
             buf[0] = code;
@@ -32,7 +32,7 @@ function WebTerm(id, options = {}) {
         ws = new WebSocket(url);
         ws.onopen = () => {
             // Send initial terminal size
-            send(0, JSON.stringify({ cols: term.cols, rows: term.rows }));
+            term.send(0, JSON.stringify({ cols: term.cols, rows: term.rows }));
             // Notify user of successful connection
             term.writeln(`\x1b[32mConnected to webterm stream...\x1b[0m`);
             term.writeln('');
@@ -75,12 +75,14 @@ function WebTerm(id, options = {}) {
     });
 
     term.onData((data) => {
-        send(1, data);
+        term.send(1, data);
     });
     term.onResize((size) => {
-        send(0, JSON.stringify({ cols: size.cols, rows: size.rows }));
+        term.send(0, JSON.stringify({ cols: size.cols, rows: size.rows }));
     });
 
     // Fit terminal to container
     fitAddon.fit();
+
+    return term;
 }

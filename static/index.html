@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="webterm.css" />
     <script src="webterm.js"></script>
     <script>
-        WebTerm("terminal", {{ .Terminal }});
+        WebTerm("terminal", {{ .Terminal.ToJSON }});
     </script>
 </body>
 

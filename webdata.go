@@ -1,10 +1,14 @@
 package webterm
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"html/template"
+)
 
 type TemplateData struct {
 	Terminal     TerminalOptions
 	Localization map[string]string
+	Ext          any
 }
 
 func (td TemplateData) Localize(s string) string {
@@ -38,6 +42,11 @@ func DefaultTerminalOptions() TerminalOptions {
 		DisableStdin: false,
 		ConvertEol:   false,
 	}
+}
+
+func (tt TerminalOptions) ToJSON() template.JS {
+	opts, _ := json.MarshalIndent(tt, "", "  ")
+	return template.JS(opts)
 }
 
 func (tt TerminalOptions) String() string {

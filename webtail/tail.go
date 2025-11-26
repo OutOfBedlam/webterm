@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/OutOfBedlam/webterm"
 )
 
 type ITail interface {
@@ -48,7 +50,7 @@ func (mt *MultiTail) Start() error {
 			return fmt.Errorf("failed to start tail for %w", err)
 		}
 		if t, ok := tail.(*SingleTail); ok {
-			if l := len(StripAnsiCodes(t.label)); l > aliasWidth {
+			if l := len(webterm.StripAnsiCodes(t.label)); l > aliasWidth {
 				aliasWidth = l
 			}
 		}
@@ -62,7 +64,7 @@ func (mt *MultiTail) Start() error {
 			labelLen := 0
 			if tt, ok := t.(*SingleTail); ok {
 				label = tt.label
-				labelLen = len(StripAnsiCodes(label))
+				labelLen = len(webterm.StripAnsiCodes(label))
 			}
 			if labelLen < aliasWidth {
 				label = label + strings.Repeat(" ", aliasWidth-labelLen)
