@@ -33,15 +33,13 @@ function WebTerm(id, options = {}) {
         ws.onopen = () => {
             // Send initial terminal size
             term.send(0, JSON.stringify({ cols: term.cols, rows: term.rows }));
-            // Notify user of successful connection
-            term.writeln(`\x1b[32mConnected to webterm stream...\x1b[0m`);
-            term.writeln('');
         };
         ws.onmessage = (event) => {
             term.write(event.data);
         };
         ws.onerror = (error) => {
-            term.writeln('\x1b[31mConnection error.\x1b[0m', error);
+            console.log("WebSocket error:", error);
+            term.writeln('\x1b[31mConnection error.\x1b[0m');
         };
         ws.onclose = () => {
             term.writeln('\x1b[33mConnection closed.\x1b[0m');

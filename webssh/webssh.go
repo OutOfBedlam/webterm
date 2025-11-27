@@ -1,7 +1,9 @@
 package webssh
 
 import (
+	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"os"
 
@@ -10,6 +12,7 @@ import (
 )
 
 var _ webterm.Runner = (*WebSSH)(nil)
+var _ webterm.Session = (*WebSSHSession)(nil)
 
 type WebSSH struct {
 	Network  string
@@ -19,6 +22,18 @@ type WebSSH struct {
 	Auth     []ssh.AuthMethod
 	TermType string
 	Command  string
+}
+
+func (ws *WebSSH) Session() (webterm.Session, error) {
+	return &WebSSHSession{WebSSH: *ws}, nil
+}
+
+func (ws *WebSSH) Template() (*template.Template, any) {
+	return nil, nil
+}
+
+type WebSSHSession struct {
+	WebSSH
 
 	conn    *ssh.Client
 	session *ssh.Session
@@ -26,22 +41,29 @@ type WebSSH struct {
 	writer  io.Writer
 }
 
-func (ws *WebSSH) Open() error {
-	if ws.Network == "" {
-		ws.Network = "tcp"
+func (ws *WebSSHSession) Open() error {
+	network := ws.Network
+	host := ws.Host
+	port := ws.Port
+	user := ws.User
+	termType := ws.TermType
+	if network == "" {
+		network = "tcp"
 	}
-	if ws.Port == 0 {
-		ws.Port = 22
+	if port == 0 {
+		port = 22
 	}
-	if ws.User == "" {
-		ws.User = os.Getenv("USER")
+	if user == "" {
+		user = os.Getenv("USER")
 	}
-	if ws.TermType == "" {
-		ws.TermType = "xterm"
+	if termType == "" {
+		termType = "xterm"
 	}
-	conn, err := ssh.Dial(ws.Network, fmt.Sprintf("%s:%d", ws.Host, ws.Port), &ssh.ClientConfig{
-		User:            ws.User,
-		Auth:            ws.Auth,
+	auth := append(ws.Auth, ssh.PasswordCallback(ws.no_password))
+
+	conn, err := ssh.Dial(network, fmt.Sprintf("%s:%d", host, port), &ssh.ClientConfig{
+		User:            user,
+		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	})
 	if err != nil {
@@ -71,7 +93,7 @@ func (ws *WebSSH) Open() error {
 	ws.reader = io.MultiReader(stdout, stderr)
 	ws.writer = stdin
 
-	err = session.RequestPty(ws.TermType, 40, 80, ssh.TerminalModes{
+	err = session.RequestPty(termType, 40, 80, ssh.TerminalModes{
 		ssh.ECHO: 1, // enable echoing
 	})
 	if err != nil {
@@ -94,7 +116,7 @@ func (ws *WebSSH) Open() error {
 	return nil
 }
 
-func (ws *WebSSH) Close() error {
+func (ws *WebSSHSession) Close() error {
 	if ws.session != nil {
 		ws.session.Signal(ssh.SIGKILL)
 		ws.session.Close()
@@ -107,14 +129,18 @@ func (ws *WebSSH) Close() error {
 	return nil
 }
 
-func (ws *WebSSH) Read(p []byte) (n int, err error) {
+func (ws *WebSSHSession) Read(p []byte) (n int, err error) {
 	return ws.reader.Read(p)
 }
 
-func (ws *WebSSH) Write(p []byte) (n int, err error) {
+func (ws *WebSSHSession) Write(p []byte) (n int, err error) {
 	return ws.writer.Write(p)
 }
 
-func (ws *WebSSH) SetWinSize(cols, rows int) error {
+func (ws *WebSSHSession) SetWinSize(cols, rows int) error {
 	return ws.session.WindowChange(rows, cols)
+}
+
+func (ws *WebSSHSession) no_password() (string, error) {
+	return "", errors.New("no password provided")
 }

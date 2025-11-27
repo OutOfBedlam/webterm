@@ -1,6 +1,7 @@
 package webexec
 
 import (
+	"html/template"
 	"os"
 	"os/exec"
 
@@ -9,50 +10,62 @@ import (
 )
 
 var _ webterm.Runner = (*WebExec)(nil)
+var _ webterm.Session = (*WebExecSession)(nil)
 
 type WebExec struct {
 	Command string
 	Args    []string
 	Dir     string
+}
 
+func (we *WebExec) Session() (webterm.Session, error) {
+	return &WebExecSession{WebExec: *we}, nil
+}
+
+func (we *WebExec) Template() (*template.Template, any) {
+	return nil, nil
+}
+
+type WebExecSession struct {
+	WebExec
 	cmd *exec.Cmd
 	tty *os.File
 }
 
-func (wt *WebExec) Open() error {
-	wt.cmd = exec.Command(wt.Command, wt.Args...)
-	wt.cmd.Dir = wt.Dir
+func (wes *WebExecSession) Open() error {
+	wes.cmd = exec.Command(wes.Command, wes.Args...)
+	wes.cmd.Dir = wes.Dir
 
-	if tty, err := pty.Start(wt.cmd); err != nil {
+	if tty, err := pty.Start(wes.cmd); err != nil {
 		return err
 	} else {
-		wt.tty = tty
+		wes.tty = tty
 	}
 	return nil
 }
 
-func (we *WebExec) Close() error {
-	if we.cmd != nil {
-		if we.cmd.Process != nil {
-			we.cmd.Process.Kill()
+func (wes *WebExecSession) Close() error {
+	if wes.cmd != nil {
+		if wes.cmd.Process != nil {
+			wes.cmd.Process.Kill()
 		}
-		we.cmd.Wait()
+		wes.cmd.Wait()
 	}
-	if we.tty != nil {
-		we.tty.Close()
-		we.tty = nil
+	if wes.tty != nil {
+		wes.tty.Close()
+		wes.tty = nil
 	}
 	return nil
 }
 
-func (we *WebExec) Read(p []byte) (n int, err error) {
-	return we.tty.Read(p)
+func (wes *WebExecSession) Read(p []byte) (n int, err error) {
+	return wes.tty.Read(p)
 }
 
-func (we *WebExec) Write(p []byte) (n int, err error) {
-	return we.tty.Write(p)
+func (wes *WebExecSession) Write(p []byte) (n int, err error) {
+	return wes.tty.Write(p)
 }
 
-func (we *WebExec) SetWinSize(cols int, rows int) error {
-	return pty.Setsize(we.tty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+func (wes *WebExecSession) SetWinSize(cols int, rows int) error {
+	return pty.Setsize(wes.tty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }

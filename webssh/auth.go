@@ -6,8 +6,8 @@ func AuthPassword(password string) ssh.AuthMethod {
 	return ssh.Password(password)
 }
 
-func AuthKeyboardInteractive(fn ssh.KeyboardInteractiveChallenge) ssh.AuthMethod {
-	return ssh.KeyboardInteractive(fn)
+func AuthPasswordCallback(fn func() (string, error)) ssh.AuthMethod {
+	return ssh.PasswordCallback(fn)
 }
 
 func AuthPrivateKey(key []byte) ssh.AuthMethod {

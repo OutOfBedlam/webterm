@@ -14,6 +14,12 @@ import (
 )
 
 type Runner interface {
+	Session() (Session, error)
+	// provide custom template, and template-data if nil default will be used
+	Template() (*template.Template, any)
+}
+
+type Session interface {
 	Open() error
 	Close() error
 	Read(p []byte) (n int, err error)
@@ -21,10 +27,8 @@ type Runner interface {
 	SetWinSize(cols, rows int) error
 }
 
-type ExtRunner interface {
-	ExtTemplate() *template.Template // provide custom template, if nil default will be used
-	ExtData() any                    // provide extension data to template
-	ExtMessage(data []byte)          // handle extension messages from client
+type ExtSession interface {
+	ExtMessage(data []byte) // handle extension messages from client
 }
 
 type WebTerm struct {
@@ -97,36 +101,15 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, wt.cutPrefix)
 	defer func() {
 		if e := recover(); e != nil {
-			slog.Error("panic recovered", "error", e)
+			slog.Error("panic recovered", "error", e, "path", r.URL.Path)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	}()
 	switch path {
 	case "":
-		var tmpl *template.Template
-		if extRun, ok := wt.runner.(ExtRunner); ok {
-			tmpl = extRun.ExtTemplate()
-		}
-		if tmpl == nil {
-			if tmplIndex == nil {
-				if b, err := staticFS.ReadFile("static/index.html"); err != nil {
-					http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
-					return
-				} else {
-					tmplIndex = template.Must(template.New("index").Parse(string(b)))
-				}
-			}
-			tmpl = tmplIndex
-		}
-		if tmpl == nil {
-			http.Error(w, "Template not provided", http.StatusInternalServerError)
-			return
-		}
-		if err := tmpl.Execute(w, wt.dataMap()); err != nil {
-			http.Error(w, "Failed to render index.html", http.StatusInternalServerError)
-		}
+		wt.index(w, r)
 	case "data":
-		WsDataHandle(wt.runner)(w, r)
+		wt.data(w, r)
 	default:
 		if strings.HasPrefix(path, "index") {
 			http.NotFound(w, r)
@@ -137,19 +120,78 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (wt *WebTerm) dataMap() TemplateData {
-	var ext any
-	if extRun, ok := wt.runner.(ExtRunner); ok {
-		ext = extRun.ExtData()
+func (wt *WebTerm) index(w http.ResponseWriter, _ *http.Request) {
+	var tmpl *template.Template
+	var extData any
+	if extTmpl, data := wt.runner.Template(); extTmpl != nil {
+		tmpl = extTmpl
+		extData = data
 	}
-	return TemplateData{
+	if tmpl == nil {
+		if tmplIndex == nil {
+			if b, err := staticFS.ReadFile("static/index.html"); err != nil {
+				http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+				return
+			} else {
+				tmplIndex = template.Must(template.New("index").Parse(string(b)))
+			}
+		}
+		tmpl = tmplIndex
+	}
+	if tmpl == nil {
+		http.Error(w, "Template not provided", http.StatusInternalServerError)
+		return
+	}
+	tmplData := TemplateData{
 		Terminal:     wt.terminalOptions,
 		Localization: wt.localization,
-		Ext:          ext,
+		Ext:          extData,
+	}
+	if err := tmpl.Execute(w, tmplData); err != nil {
+		http.Error(w, "Failed to render index.html", http.StatusInternalServerError)
 	}
 }
 
-func pumpStdin(ws *websocket.Conn, runner Runner) {
+func (wt *WebTerm) data(w http.ResponseWriter, r *http.Request) {
+	session, err := wt.runner.Session()
+	if err != nil {
+		slog.Error("webterm failed to create runner", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := session.Open(); err != nil {
+		slog.Error("webterm failed to run", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer session.Close()
+
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		slog.Error("websocket upgrade fail", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	defer conn.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pumpStdout(conn, session)
+	}()
+	pumpStdin(conn, session)
+	wg.Wait()
+	slog.Info("webterm data closed")
+}
+
+func pumpStdin(ws *websocket.Conn, runner Session) {
 	defer func() {
 		ws.Close()
 		runner.Close()
@@ -158,7 +200,7 @@ func pumpStdin(ws *websocket.Conn, runner Runner) {
 	for {
 		_, message, err := ws.ReadMessage()
 		if err != nil {
-			slog.Error("failed to read from websocket", "error", err)
+			slog.Error("webterm failed to read from websocket", "error", err)
 			break
 		}
 		if len(message) == 0 {
@@ -170,72 +212,37 @@ func pumpStdin(ws *websocket.Conn, runner Runner) {
 		case 0: // Resize message
 			sz := pty.Winsize{}
 			if err := json.Unmarshal(data, &sz); err != nil {
-				slog.Error("failed to unmarshal resize message", "error", err)
+				slog.Error("webterm failed to unmarshal resize message", "error", err)
 				continue
 			}
 			runner.SetWinSize(int(sz.Cols), int(sz.Rows))
 		case 1: // Data message
 			_, err = runner.Write(data)
 			if err != nil {
-				slog.Error("failed to write to stdin", "error", err)
+				slog.Error("webterm failed to write to runner", "error", err)
 				return
 			}
 		case 2: // Ext message
-			if extRun, ok := runner.(ExtRunner); ok {
+			if extRun, ok := runner.(ExtSession); ok {
 				extRun.ExtMessage(data)
 			}
 		}
 	}
 }
 
-func pumpStdout(ws *websocket.Conn, runner Runner) {
+func pumpStdout(ws *websocket.Conn, runner Session) {
 	defer ws.Close()
 	buffer := make([]byte, 8192)
 	for {
 		n, err := runner.Read(buffer)
 		if err != nil {
-			slog.Error("failed to read from runner", "error", err)
+			slog.Error("webterm failed to read from runner", "error", err)
 			break
 		}
 		err = ws.WriteMessage(websocket.BinaryMessage, buffer[:n])
 		if err != nil {
-			slog.Error("failed to write to websocket", "error", err)
+			slog.Error("webterm failed to write to websocket", "error", err)
 			break
 		}
-	}
-}
-
-func WsDataHandle(runner Runner) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var upgrader = websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
-		}
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			slog.Error("websocket upgrade fail", "error", err)
-			http.Error(w, "Failed to upgrade to websocket", http.StatusInternalServerError)
-		}
-		defer conn.Close()
-
-		if err := runner.Open(); err != nil {
-			slog.Error("failed to run", "error", err)
-			http.Error(w, "Failed to start terminal", http.StatusInternalServerError)
-			return
-		}
-		defer runner.Close()
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pumpStdout(conn, runner)
-		}()
-		pumpStdin(conn, runner)
-		wg.Wait()
-		slog.Info("webterm data closed")
 	}
 }
