@@ -219,10 +219,10 @@
                     <span class="arrow-down" id="logtype-arrow"></span>
                 </button>
                 <div class="logtype-select-dropdown" id="logtype-dropdown">
-                    {{ range $name := .Ext.Files }}
+                    {{ range $f := .Ext.Files }}
                     <div class="logtype-option">
-                        <input type="checkbox" id="logtype-{{$name}}" value="{{$name}}" checked>
-                        <label for="logtype-{{$name}}">{{$name}}</label>
+                        <input type="checkbox" id="{{$f.ID}}" value="{{$f.Label}}" checked>
+                        <label for="{{$f.ID}}">{{$f.Label}}</label>
                     </div>
                     {{ end }}
                 </div>
@@ -294,10 +294,10 @@
         });
 
         // Get selected log types
-        function getSelectedLogTypes() {
+        function getSelectedFileIDs() {
             return Array.from(logtypeCheckboxes)
                 .filter(cb => cb.checked)
-                .map(cb => cb.value);
+                .map(cb => cb.id);
         }
 
         // Filter controls
@@ -307,7 +307,7 @@
 
         applyBtn.addEventListener('click', () => {
             const filter = filterInput.value.trim();
-            const selected = getSelectedLogTypes();
+            const selected = getSelectedFileIDs();
             term.send(2, JSON.stringify({ filter: filter, files: selected }));
         });
 
@@ -316,14 +316,14 @@
             // Reset all checkboxes to checked
             logtypeCheckboxes.forEach(cb => cb.checked = true);
             updateLogtypeSelectText();
-            term.send(2, JSON.stringify({ files: getSelectedLogTypes() }));
+            term.send(2, JSON.stringify({ files: getSelectedFileIDs() }));
         });
 
         // Allow Enter key to apply filter
         filterInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 const filter = filterInput.value.trim();
-                const selected = getSelectedLogTypes();
+                const selected = getSelectedFileIDs();
                 term.send(2, JSON.stringify({ filter: filter, files: selected }));
             }
         });

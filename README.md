@@ -219,15 +219,6 @@ type Runner interface {
 }
 ```
 
-## Architecture
-
-WebTerm uses:
-- **xterm.js** for the frontend terminal emulator
-- **WebSocket** for bidirectional communication
-- **gorilla/websocket** for WebSocket handling
-- **creack/pty** for PTY management (webexec)
-- **golang.org/x/crypto/ssh** for SSH connections (webssh)
-
 ## Sub-packages
 
 - **webexec** - Local command execution runner

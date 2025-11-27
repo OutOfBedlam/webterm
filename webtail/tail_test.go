@@ -23,7 +23,7 @@ func TestTail(t *testing.T) {
 	f.Close()
 
 	// Start tailing
-	tail := NewSingleTail(testFile, WithPollInterval(100*time.Millisecond))
+	tail := NewTail(testFile, WithPollInterval(100*time.Millisecond))
 	if err := tail.Start(); err != nil {
 		t.Fatalf("Failed to start tail: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestTailRotation(t *testing.T) {
 	f.Close()
 
 	// Start tailing
-	tail := NewSingleTail(testFile, WithPollInterval(100*time.Millisecond))
+	tail := NewTail(testFile, WithPollInterval(100*time.Millisecond))
 	if err := tail.Start(); err != nil {
 		t.Fatalf("Failed to start tail: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestTailTruncation(t *testing.T) {
 	f.Close()
 
 	// Start tailing
-	tail := NewSingleTail(testFile, WithPollInterval(100*time.Millisecond))
+	tail := NewTail(testFile, WithPollInterval(100*time.Millisecond))
 	if err := tail.Start(); err != nil {
 		t.Fatalf("Failed to start tail: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestTailGrepPattern(t *testing.T) {
 	fmt.Fprintln(f, "info: all is well")
 	f.Close()
 
-	tail := NewSingleTail(testFile, WithPollInterval(100*time.Millisecond), WithPattern("error", "thing"), WithPattern("info:"))
+	tail := NewTail(testFile, WithPollInterval(100*time.Millisecond), WithPattern("error", "thing"), WithPattern("info:"))
 	if err := tail.Start(); err != nil {
 		t.Fatalf("Failed to start tail: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestTailWithColoringPlugin(t *testing.T) {
 
 	// Create tail with coloring plugin
 	coloringPlugin := NewWithSyntaxHighlighting("levels")
-	tail := NewSingleTail(testFile,
+	tail := NewTail(testFile,
 		WithPollInterval(100*time.Millisecond),
 		WithPlugins(coloringPlugin),
 	)
@@ -468,8 +468,8 @@ func TestMultiTail(t *testing.T) {
 	f2.Close()
 
 	// Create individual tails
-	tail1 := NewSingleTail(testFile1, WithPollInterval(100*time.Millisecond))
-	tail2 := NewSingleTail(testFile2, WithPollInterval(100*time.Millisecond))
+	tail1 := NewTail(testFile1, WithPollInterval(100*time.Millisecond))
+	tail2 := NewTail(testFile2, WithPollInterval(100*time.Millisecond))
 
 	// Create MultiTail
 	multiTail := NewMultiTail(tail1, tail2)

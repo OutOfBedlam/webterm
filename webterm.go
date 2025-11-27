@@ -22,9 +22,9 @@ type Runner interface {
 }
 
 type ExtRunner interface {
-	Template() *template.Template // provide custom template, if nil default will be used
-	ExtData() any                 // provide extension data to template
-	ExtMessage(data []byte)       // handle extension messages from client
+	ExtTemplate() *template.Template // provide custom template, if nil default will be used
+	ExtData() any                    // provide extension data to template
+	ExtMessage(data []byte)          // handle extension messages from client
 }
 
 type WebTerm struct {
@@ -58,6 +58,12 @@ func WithFontFamily(fontFamily string) Option {
 func WithFontSize(fontSize int) Option {
 	return func(wt *WebTerm) {
 		wt.terminalOptions.FontSize = fontSize
+	}
+}
+
+func WithScrollback(scrollback int) Option {
+	return func(wt *WebTerm) {
+		wt.terminalOptions.Scrollback = scrollback
 	}
 }
 
@@ -98,8 +104,8 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch path {
 	case "":
 		var tmpl *template.Template
-		if provider, ok := wt.runner.(ExtRunner); ok {
-			tmpl = provider.Template()
+		if extRun, ok := wt.runner.(ExtRunner); ok {
+			tmpl = extRun.ExtTemplate()
 		}
 		if tmpl == nil {
 			if tmplIndex == nil {
@@ -133,8 +139,8 @@ func (wt *WebTerm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (wt *WebTerm) dataMap() TemplateData {
 	var ext any
-	if provider, ok := wt.runner.(ExtRunner); ok {
-		ext = provider.ExtData()
+	if extRun, ok := wt.runner.(ExtRunner); ok {
+		ext = extRun.ExtData()
 	}
 	return TemplateData{
 		Terminal:     wt.terminalOptions,
@@ -175,8 +181,8 @@ func pumpStdin(ws *websocket.Conn, runner Runner) {
 				return
 			}
 		case 2: // Ext message
-			if provider, ok := runner.(ExtRunner); ok {
-				provider.ExtMessage(data)
+			if extRun, ok := runner.(ExtRunner); ok {
+				extRun.ExtMessage(data)
 			}
 		}
 	}

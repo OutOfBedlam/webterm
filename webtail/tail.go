@@ -1,6 +1,8 @@
 package webtail
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +21,7 @@ type ITail interface {
 	Lines() <-chan string
 }
 
-var _ ITail = (*SingleTail)(nil)
+var _ ITail = (*Tail)(nil)
 var _ ITail = (*MultiTail)(nil)
 
 // MultiTail allows tailing multiple files and merging their output
@@ -32,7 +34,7 @@ type MultiTail struct {
 func NewMultiTail(tails ...ITail) ITail {
 	buff := len(tails) * 100
 	for _, tail := range tails {
-		if t, ok := tail.(*SingleTail); ok && buff < t.bufferSize {
+		if t, ok := tail.(*Tail); ok && buff < t.bufferSize {
 			buff = t.bufferSize
 		}
 	}
@@ -49,7 +51,7 @@ func (mt *MultiTail) Start() error {
 		if err := tail.Start(); err != nil {
 			return fmt.Errorf("failed to start tail for %w", err)
 		}
-		if t, ok := tail.(*SingleTail); ok {
+		if t, ok := tail.(*Tail); ok {
 			if l := len(webterm.StripAnsiCodes(t.label)); l > aliasWidth {
 				aliasWidth = l
 			}
@@ -62,7 +64,7 @@ func (mt *MultiTail) Start() error {
 			defer mt.wg.Done()
 			label := ""
 			labelLen := 0
-			if tt, ok := t.(*SingleTail); ok {
+			if tt, ok := t.(*Tail); ok {
 				label = tt.label
 				labelLen = len(webterm.StripAnsiCodes(label))
 			}
@@ -95,14 +97,16 @@ func (mt *MultiTail) Lines() <-chan string {
 	return mt.c
 }
 
-// SingleTail provides functionality to tail a file
+// Tail provides functionality to tail a file
 // it works similar to 'tail -F' command in unix,
 // which follows the file even if it is rotated
-type SingleTail struct {
+type Tail struct {
+	id           string
 	filepath     string
 	label        string // terminal display label for the file, it can contain ANSI color codes
 	c            chan string
 	stopChan     chan struct{}
+	silent       bool
 	pollInterval time.Duration
 	bufferSize   int
 	patterns     []Pattern
@@ -129,23 +133,23 @@ func (p Pattern) Match(s string) bool {
 }
 
 // Option is a functional option for Tail
-type Option func(*SingleTail)
+type Option func(*Tail)
 
 // WithPollInterval sets the polling interval for checking file changes
 func WithPollInterval(d time.Duration) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.pollInterval = d
 	}
 }
 
 func WithBufferSize(size int) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.bufferSize = size
 	}
 }
 
 func WithPattern(patterns ...string) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		var group Pattern
 		for _, pattern := range patterns {
 			re, err := regexp.Compile(pattern)
@@ -158,32 +162,34 @@ func WithPattern(patterns ...string) Option {
 }
 
 func WithLast(n int) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.showLastN = n
 	}
 }
 
 func WithLabel(label string) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.label = label
 	}
 }
 
 func WithSyntaxHighlighting(syntax ...string) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.plugins = append(t.plugins, NewWithSyntaxHighlighting(syntax...))
 	}
 }
 
 func WithPlugins(p ...Plugin) Option {
-	return func(t *SingleTail) {
+	return func(t *Tail) {
 		t.plugins = append(t.plugins, p...)
 	}
 }
 
-// NewSingleTail creates Tail instance
-func NewSingleTail(filename string, opts ...Option) ITail {
-	t := &SingleTail{
+// NewTail creates Tail instance
+func NewTail(filename string, opts ...Option) *Tail {
+	sum := md5.Sum([]byte(filename))
+	t := &Tail{
+		id:           string(hex.EncodeToString(sum[:])),
 		filepath:     filename,
 		label:        filepath.Base(filename),
 		bufferSize:   100,
@@ -202,12 +208,16 @@ func NewSingleTail(filename string, opts ...Option) ITail {
 
 // Lines returns output channel
 // caller can read lines from this channel
-func (tail *SingleTail) Lines() <-chan string {
+func (tail *Tail) Lines() <-chan string {
 	return tail.c
 }
 
+func (tail *Tail) SetSilent(silent bool) {
+	tail.silent = silent
+}
+
 // Start begins tailing the file
-func (tail *SingleTail) Start() error {
+func (tail *Tail) Start() error {
 	// Open the file initially
 	if err := tail.openFile(); err != nil {
 		return err
@@ -231,7 +241,7 @@ func (tail *SingleTail) Start() error {
 }
 
 // readLastLines reads the last n lines from the file and sends them to the channel
-func (tail *SingleTail) readLastLines(n int) error {
+func (tail *Tail) readLastLines(n int) error {
 	stat, err := tail.file.Stat()
 	if err != nil {
 		return fmt.Errorf("failed to stat file: %w", err)
@@ -331,7 +341,7 @@ func (tail *SingleTail) readLastLines(n int) error {
 			}
 		}
 
-		if !matched {
+		if !matched || tail.silent {
 			continue
 		}
 		select {
@@ -352,7 +362,7 @@ func (tail *SingleTail) readLastLines(n int) error {
 }
 
 // Stop stops tailing the file
-func (tail *SingleTail) Stop() error {
+func (tail *Tail) Stop() error {
 	close(tail.stopChan)
 
 	// Wait for goroutine to finish before closing the channel
@@ -368,7 +378,7 @@ func (tail *SingleTail) Stop() error {
 }
 
 // openFile opens the file for tailing
-func (tail *SingleTail) openFile() error {
+func (tail *Tail) openFile() error {
 	file, err := openFileShared(tail.filepath)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
@@ -389,7 +399,7 @@ func (tail *SingleTail) openFile() error {
 }
 
 // run is the main loop that tails the file
-func (tail *SingleTail) run() {
+func (tail *Tail) run() {
 	defer tail.wg.Done()
 	ticker := time.NewTicker(tail.pollInterval)
 	defer ticker.Stop()
@@ -417,7 +427,7 @@ func (tail *SingleTail) run() {
 }
 
 // checkAndRead checks for file changes and reads new lines
-func (tail *SingleTail) checkAndRead() error {
+func (tail *Tail) checkAndRead() error {
 	// Check if file still exists and hasn't been rotated
 	stat, err := os.Stat(tail.filepath)
 	if err != nil {
@@ -486,7 +496,7 @@ func (tail *SingleTail) checkAndRead() error {
 }
 
 // readLines reads new lines from the file
-func (tail *SingleTail) readLines() {
+func (tail *Tail) readLines() {
 	buf := make([]byte, 4096)
 	var lineBuf []byte
 
@@ -546,7 +556,7 @@ func (tail *SingleTail) readLines() {
 						}
 					}
 
-					if matched {
+					if matched && !tail.silent {
 						// Send the line
 						select {
 						case tail.c <- line:
@@ -584,7 +594,7 @@ func (tail *SingleTail) readLines() {
 }
 
 // reopenIfNeeded tries to reopen the file if it was rotated
-func (tail *SingleTail) reopenIfNeeded() error {
+func (tail *Tail) reopenIfNeeded() error {
 	// Try to open the file
 	return tail.openFile()
 }

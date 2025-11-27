@@ -176,3 +176,29 @@ var ThemeNordic = TerminalTheme{
 	BrightCyan:          "#8fbcbb",
 	BrightWhite:         "#eceff4",
 }
+
+// ThemeLight provides a light color scheme with white background and black text
+var ThemeLight = TerminalTheme{
+	Background:          "#ffffff",
+	Foreground:          "#000000",
+	Cursor:              "#000000",
+	CursorAccent:        "#ffffff",
+	SelectionBackground: "#d3d3d3",
+	SelectionForeground: "#000000",
+	Black:               "#000000",
+	Red:                 "#cd0000",
+	Green:               "#00cd00",
+	Yellow:              "#cdcd00",
+	Blue:                "#0000ee",
+	Magenta:             "#cd00cd",
+	Cyan:                "#00cdcd",
+	White:               "#e5e5e5",
+	BrightBlack:         "#7f7f7f",
+	BrightRed:           "#ff0000",
+	BrightGreen:         "#00ff00",
+	BrightYellow:        "#ffff00",
+	BrightBlue:          "#5c5cff",
+	BrightMagenta:       "#ff00ff",
+	BrightCyan:          "#00ffff",
+	BrightWhite:         "#ffffff",
+}
