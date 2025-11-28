@@ -25,10 +25,7 @@ type Session interface {
 	Read(p []byte) (n int, err error)
 	Write(p []byte) (n int, err error)
 	SetWinSize(cols, rows int) error
-}
-
-type ExtSession interface {
-	ExtMessage(data []byte) // handle extension messages from client
+	Control(data []byte) error // handle messages from client
 }
 
 type WebTerm struct {
@@ -215,16 +212,17 @@ func pumpStdin(ws *websocket.Conn, runner Session) {
 				slog.Error("webterm failed to unmarshal resize message", "error", err)
 				continue
 			}
-			runner.SetWinSize(int(sz.Cols), int(sz.Rows))
+			if err := runner.SetWinSize(int(sz.Cols), int(sz.Rows)); err != nil {
+				slog.Error("webterm failed to set window size", "error", err)
+			}
 		case 1: // Data message
-			_, err = runner.Write(data)
-			if err != nil {
+			if _, err := runner.Write(data); err != nil {
 				slog.Error("webterm failed to write to runner", "error", err)
 				return
 			}
-		case 2: // Ext message
-			if extRun, ok := runner.(ExtSession); ok {
-				extRun.ExtMessage(data)
+		case 2: // Control message
+			if err := runner.Control(data); err != nil {
+				slog.Error("webterm failed to process control message", "error", err)
 			}
 		}
 	}

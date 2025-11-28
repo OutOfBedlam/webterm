@@ -16,7 +16,6 @@ import (
 
 var _ webterm.Runner = (*WebTail)(nil)
 var _ webterm.Session = (*WebTailSession)(nil)
-var _ webterm.ExtSession = (*WebTailSession)(nil)
 
 type WebTail struct {
 	Tails []TailConfig
@@ -191,11 +190,11 @@ type ExtMessage struct {
 	Files  []string `json:"files"`
 }
 
-func (wts *WebTailSession) ExtMessage(data []byte) {
+func (wts *WebTailSession) Control(data []byte) error {
 	m := ExtMessage{}
 	if err := json.Unmarshal(data, &m); err != nil {
 		slog.Error("webtail failed to unmarshal ext message", "error", err)
-		return
+		return err
 	}
 	wts.SetFilter(m.Filter)
 	for _, t := range wts.tails {
@@ -208,4 +207,5 @@ func (wts *WebTailSession) ExtMessage(data []byte) {
 		}
 		t.SetSilent(!include)
 	}
+	return nil
 }

@@ -144,3 +144,7 @@ func (ws *WebSSHSession) SetWinSize(cols, rows int) error {
 func (ws *WebSSHSession) no_password() (string, error) {
 	return "", errors.New("no password provided")
 }
+
+func (ws *WebSSHSession) Control(data []byte) error {
+	return nil
+}

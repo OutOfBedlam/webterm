@@ -69,3 +69,7 @@ func (wes *WebExecSession) Write(p []byte) (n int, err error) {
 func (wes *WebExecSession) SetWinSize(cols int, rows int) error {
 	return pty.Setsize(wes.tty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
+
+func (wes *WebExecSession) Control(data []byte) error {
+	return nil
+}
