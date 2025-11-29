@@ -1,7 +1,6 @@
 package webssh
 
 import (
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -11,15 +10,65 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+type Hop struct {
+	Network string
+	Host    string
+	Port    int
+	User    string
+	Auth    []ssh.AuthMethod
+}
+
+type Hops []Hop
+
+func (hops Hops) Connect() (*ssh.Client, error) {
+	var client *ssh.Client
+	var err error
+	for i, hop := range hops {
+		network := hop.Network
+		host := hop.Host
+		port := hop.Port
+		user := hop.User
+		if network == "" {
+			network = "tcp"
+		}
+		if port == 0 {
+			port = 22
+		}
+		addr := fmt.Sprintf("%s:%d", host, port)
+		if user == "" {
+			user = os.Getenv("USER")
+		}
+		conf := &ssh.ClientConfig{
+			User:            user,
+			Auth:            hop.Auth,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+
+		if i == 0 {
+			client, err = ssh.Dial(network, addr, conf)
+		} else {
+			conn, err := client.Dial(network, fmt.Sprintf("%s:%d", hop.Host, hop.Port))
+			if err != nil {
+				return nil, err
+			}
+			ncc, chans, reqs, err := ssh.NewClientConn(conn, addr, conf)
+			if err != nil {
+				return nil, err
+			}
+			client = ssh.NewClient(ncc, chans, reqs)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
+}
+
 var _ webterm.Runner = (*WebSSH)(nil)
 var _ webterm.Session = (*WebSSHSession)(nil)
 
 type WebSSH struct {
-	Network  string
-	Host     string
-	Port     int
-	User     string
-	Auth     []ssh.AuthMethod
+	Hops     Hops
 	TermType string
 	Command  string
 }
@@ -42,50 +91,27 @@ type WebSSHSession struct {
 }
 
 func (ws *WebSSHSession) Open() error {
-	network := ws.Network
-	host := ws.Host
-	port := ws.Port
-	user := ws.User
-	termType := ws.TermType
-	if network == "" {
-		network = "tcp"
+	if conn, err := ws.Hops.Connect(); err != nil {
+		return err
+	} else {
+		ws.conn = conn
 	}
-	if port == 0 {
-		port = 22
-	}
-	if user == "" {
-		user = os.Getenv("USER")
-	}
-	if termType == "" {
-		termType = "xterm"
-	}
-	auth := append(ws.Auth, ssh.PasswordCallback(ws.no_password))
 
-	conn, err := ssh.Dial(network, fmt.Sprintf("%s:%d", host, port), &ssh.ClientConfig{
-		User:            user,
-		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	})
-	if err != nil {
+	if session, err := ws.conn.NewSession(); err != nil {
 		return err
+	} else {
+		ws.session = session
 	}
-	ws.conn = conn
 
-	session, err := conn.NewSession()
+	stdout, err := ws.session.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	ws.session = session
-
-	stdout, err := session.StdoutPipe()
+	stderr, err := ws.session.StderrPipe()
 	if err != nil {
 		return err
 	}
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		return err
-	}
-	stdin, err := session.StdinPipe()
+	stdin, err := ws.session.StdinPipe()
 	if err != nil {
 		return err
 	}
@@ -93,12 +119,16 @@ func (ws *WebSSHSession) Open() error {
 	ws.reader = io.MultiReader(stdout, stderr)
 	ws.writer = stdin
 
-	err = session.RequestPty(termType, 40, 80, ssh.TerminalModes{
+	termType := ws.TermType
+	if termType == "" {
+		termType = "xterm"
+	}
+	err = ws.session.RequestPty(termType, 40, 80, ssh.TerminalModes{
 		ssh.ECHO: 1, // enable echoing
 	})
 	if err != nil {
-		session.Close()
-		conn.Close()
+		ws.session.Close()
+		ws.conn.Close()
 		return err
 	}
 
@@ -109,7 +139,7 @@ func (ws *WebSSHSession) Open() error {
 	}
 	if err != nil {
 		ws.session.Close()
-		conn.Close()
+		ws.conn.Close()
 		return err
 	}
 
@@ -139,10 +169,6 @@ func (ws *WebSSHSession) Write(p []byte) (n int, err error) {
 
 func (ws *WebSSHSession) SetWinSize(cols, rows int) error {
 	return ws.session.WindowChange(rows, cols)
-}
-
-func (ws *WebSSHSession) no_password() (string, error) {
-	return "", errors.New("no password provided")
 }
 
 func (ws *WebSSHSession) Control(data []byte) error {
