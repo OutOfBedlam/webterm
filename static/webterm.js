@@ -4,9 +4,13 @@ function WebTerm(id, options = {}) {
 
     // Create fit addon instance
     const fitAddon = new window.FitAddon.FitAddon();
+    const webLinksAddon = new window.WebLinksAddon.WebLinksAddon();
     const webglAddon = new window.WebglAddon.WebglAddon();
 
+    // Load addons into terminal
+    term.loadAddon(webLinksAddon);
     term.loadAddon(fitAddon);
+    term.loadAddon(webLinksAddon);
     term.loadAddon(webglAddon);
 
     // WebSocket connection management
