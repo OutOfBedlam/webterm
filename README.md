@@ -67,11 +67,15 @@ func main() {
     
     term := webterm.New(
         &webssh.WebSSH{
-            Host: "example.com",
-            Port: 22,
-            User: "username",
-            Auth: []ssh.AuthMethod{
-                webssh.AuthPrivateKey(key),
+            Hops: webssh.Hops{
+                {
+                    Host: "example.com",
+                    Port: 22,
+                    User: "username",
+                    Auth: []ssh.AuthMethod{
+                        webssh.AuthPrivateKey(key),
+                    },
+                },
             },
             TermType: "xterm-256color",
         },
@@ -136,6 +140,20 @@ webterm.WithCutPrefix("/my-terminal/")
 
 // Set terminal color theme
 webterm.WithTheme(webterm.ThemeDracula)
+
+// Set terminal font family
+webterm.WithFontFamily("monospace")
+
+// Set terminal font size
+webterm.WithFontSize(14)
+
+// Set scrollback buffer size
+webterm.WithScrollback(1000)
+
+// Set custom localization strings
+webterm.WithLocalization(map[string]string{
+    "title": "My Terminal",
+})
 ```
 
 ### WebExec Configuration
@@ -152,11 +170,15 @@ webterm.WithTheme(webterm.ThemeDracula)
 
 ```go
 &webssh.WebSSH{
-    Network:  "tcp",              // Network type (default: "tcp")
-    Host:     "example.com",      // SSH host
-    Port:     22,                 // SSH port (default: 22)
-    User:     "username",         // SSH user (default: $USER)
-    Auth:     []ssh.AuthMethod{}, // Authentication methods
+    Hops: webssh.Hops{
+        {
+            Network: "tcp",              // Network type (default: "tcp")
+            Host:    "example.com",      // SSH host
+            Port:    22,                 // SSH port (default: 22)
+            User:    "username",         // SSH user (default: $USER)
+            Auth:    []ssh.AuthMethod{}, // Authentication methods
+        },
+    },
     TermType: "xterm-256color",   // Terminal type (default: "xterm")
     Command:  "",                 // Optional command to run (default: shell)
 }
@@ -199,6 +221,8 @@ WebTerm includes several built-in color themes:
 - `ThemeDracula`
 - `ThemeMolokai`
 - `ThemeNordic`
+- `ThemeUbuntu`
+- `ThemeDefault`
 
 Example:
 ```go
@@ -207,15 +231,21 @@ webterm.WithTheme(webterm.ThemeDracula)
 
 ## Custom Runner
 
-You can implement your own terminal backend by implementing the `Runner` interface:
+You can implement your own terminal backend by implementing the `Runner` and `Session` interfaces:
 
 ```go
 type Runner interface {
+    Session() (Session, error)
+    Template() (*template.Template, any)
+}
+
+type Session interface {
     Open() error
     Close() error
     Read(p []byte) (n int, err error)
     Write(p []byte) (n int, err error)
     SetWinSize(cols, rows int) error
+    Control(data []byte) error
 }
 ```
 
