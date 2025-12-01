@@ -8,7 +8,6 @@ function WebTerm(id, options = {}) {
     const webglAddon = new window.WebglAddon.WebglAddon();
 
     // Load addons into terminal
-    term.loadAddon(webLinksAddon);
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     term.loadAddon(webglAddon);
@@ -35,12 +34,14 @@ function WebTerm(id, options = {}) {
         // Connect to WebSocket endpoint
         ws = new WebSocket(url);
         ws.onopen = () => {
+            // Fit terminal to container
+            fitAddon.fit();
             // Send initial terminal size
             term.send(0, JSON.stringify({ cols: term.cols, rows: term.rows }));
         };
-        ws.onmessage = (event) => {
-            term.write(event.data);
-        };
+        //ws.onmessage = (event) => {
+            //term.write(event.data);
+        //};
         ws.onerror = (error) => {
             console.log("WebSocket error:", error);
             term.writeln('\x1b[31mConnection error.\x1b[0m');
@@ -82,9 +83,6 @@ function WebTerm(id, options = {}) {
     term.onResize((size) => {
         term.send(0, JSON.stringify({ cols: size.cols, rows: size.rows }));
     });
-
-    // Fit terminal to container
-    fitAddon.fit();
 
     return term;
 }
