@@ -60,7 +60,7 @@ func (a Addr) String() string {
 func (a Addr) Listen() (net.Listener, error) {
 	switch a.Network {
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
-		return net.Listen(a.Network, fmt.Sprintf("%s:%d", a.Host, a.Port))
+		return net.Listen(a.Network, net.JoinHostPort(a.Host, fmt.Sprintf("%d", a.Port)))
 	default:
 		return nil, fmt.Errorf("unsupported network type: %s", a.Network)
 	}
@@ -80,6 +80,36 @@ func (a Addr) Dial() (net.Conn, error) {
 	default:
 		return nil, fmt.Errorf("unsupported network type: %s", a.Network)
 	}
+}
+
+type AddrBind struct {
+	LocalIP    string
+	LocalPort  int
+	RemoteIP   string
+	RemotePort int
+}
+
+func (ab AddrBind) String() string {
+	return fmt.Sprintf("%s:%d -> %s:%d", ab.LocalIP, ab.LocalPort, ab.RemoteIP, ab.RemotePort)
+}
+
+func ParseAddrBind(spec string) (*AddrBind, error) {
+	var localIP, remoteIP string
+	var localPort, remotePort int
+	n, err := fmt.Sscanf(spec, "%[^:]:%d:%[^:]:%d", &localIP, &localPort, &remoteIP, &remotePort)
+	if err != nil || (n != 4 && n != 3) {
+		return nil, fmt.Errorf("invalid port forwarding specification: %s", spec)
+	}
+	if n == 3 {
+		// no local_ip specified
+		localIP = ""
+	}
+	return &AddrBind{
+		LocalIP:    localIP,
+		LocalPort:  localPort,
+		RemoteIP:   remoteIP,
+		RemotePort: remotePort,
+	}, nil
 }
 
 // PumpBiDirectional pumps data bi-directionally between localConn and remoteConn.

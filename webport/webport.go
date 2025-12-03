@@ -15,15 +15,34 @@ type Config struct {
 	RemoteAddr string
 }
 
-func New(cfg Config) *WebPort {
-	return &WebPort{
-		conf: cfg,
-		done: make(chan struct{}),
+func New(conf Config) (*WebPort, error) {
+	var remoteAddr *Addr
+	var localAddr *Addr
+
+	if conf.LocalAddr != "" {
+		if addr, err := ParseAddr(conf.LocalAddr); err != nil {
+			return nil, fmt.Errorf("invalid local address: %v", err)
+		} else {
+			localAddr = addr
+		}
 	}
+	if conf.RemoteAddr != "" {
+		if addr, err := ParseAddr(conf.RemoteAddr); err != nil {
+			return nil, fmt.Errorf("invalid remote address: %v", err)
+		} else {
+			remoteAddr = addr
+		}
+	}
+	ret := &WebPort{
+		localAddr:  localAddr,
+		remoteAddr: remoteAddr,
+		done:       make(chan struct{}),
+	}
+
+	return ret, nil
 }
 
 type WebPort struct {
-	conf       Config
 	localAddr  *Addr
 	remoteAddr *Addr
 	lsnr       net.Listener
@@ -33,15 +52,8 @@ type WebPort struct {
 }
 
 func (wp *WebPort) Start() error {
-	if addr, err := ParseAddr(wp.conf.LocalAddr); err != nil {
-		return fmt.Errorf("invalid local address: %v", err)
-	} else {
-		wp.localAddr = addr
-	}
-	if addr, err := ParseAddr(wp.conf.RemoteAddr); err != nil {
-		return fmt.Errorf("invalid remote address: %v", err)
-	} else {
-		wp.remoteAddr = addr
+	if wp.localAddr == nil {
+		return fmt.Errorf("local address not configured")
 	}
 	if lsnr, err := wp.localAddr.Listen(); err != nil {
 		return fmt.Errorf("failed to start listener: %v", err)
@@ -102,13 +114,10 @@ func (wp *WebPort) handleConnection(localConn net.Conn, remoteAddr *Addr) {
 // between the WebSocket connection and the remote address.
 func (wp *WebPort) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if wp.remoteAddr == nil {
-		if addr, err := ParseAddr(wp.conf.RemoteAddr); err != nil {
-			slog.Error("server not initialized", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		} else {
-			wp.remoteAddr = addr
-		}
+		err := fmt.Errorf("remote address not configured")
+		slog.Error("webport", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
