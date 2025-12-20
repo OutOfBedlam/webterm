@@ -47,6 +47,8 @@ function WebTerm(id, options = {}) {
             fitAddon.fit();
             // Send initial terminal size
             term.send(0, JSON.stringify({ cols: term.cols, rows: term.rows }));
+            // Auto focus on terminal
+            term.focus();
         };
         ws.onmessage = (event) => {
             // Handle binary data from server
