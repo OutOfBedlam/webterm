@@ -12,6 +12,11 @@ function WebTerm(id, options = {}) {
     term.loadAddon(webLinksAddon);
     term.loadAddon(webglAddon);
 
+    // Attach terminal to the DOM first
+    let container = document.getElementById(id);
+    term.open(container);
+    container.style.backgroundColor = options.theme.background;
+
     // WebSocket connection management
     let ws = null;
     // Send terminal input to server via WebSocket
@@ -65,11 +70,6 @@ function WebTerm(id, options = {}) {
             term.writeln('\x1b[33mConnection closed.\x1b[0m');
         };
     })();
-
-    // Attach terminal to the DOM
-    let container = document.getElementById(id);
-    term.open(container);
-    container.style.backgroundColor = options.theme.background;
 
     // Refit on window resize with debounce
     let resizeTimeout;
