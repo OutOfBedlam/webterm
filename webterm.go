@@ -188,6 +188,7 @@ func (wt *WebTerm) data(w http.ResponseWriter, r *http.Request) {
 	slog.Info("webterm data closed")
 }
 
+// pumpStdin reads messages from websocket and writes to runner stdin
 func pumpStdin(ws *websocket.Conn, runner Session) {
 	defer func() {
 		ws.Close()
@@ -228,16 +229,18 @@ func pumpStdin(ws *websocket.Conn, runner Session) {
 	}
 }
 
+// pumpStdout reads from runner stdout and writes to websocket
 func pumpStdout(ws *websocket.Conn, runner Session) {
 	defer ws.Close()
 	buffer := make([]byte, 8192)
 	for {
-		n, err := runner.Read(buffer)
+		buffer[0] = 1 // Data message
+		n, err := runner.Read(buffer[1:])
 		if err != nil {
 			slog.Error("webterm failed to read from runner", "error", err)
 			break
 		}
-		err = ws.WriteMessage(websocket.BinaryMessage, buffer[:n])
+		err = ws.WriteMessage(websocket.BinaryMessage, buffer[:n+1])
 		if err != nil {
 			slog.Error("webterm failed to write to websocket", "error", err)
 			break
